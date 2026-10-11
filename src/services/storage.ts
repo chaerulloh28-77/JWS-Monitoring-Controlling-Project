@@ -192,11 +192,11 @@ export const exportProjectsCsv = (projects: ProjectItem[]): void => {
   document.body.removeChild(link);
 };
 
-export const exportConstructionPlansCsv = (
+export const generateConstructionPlansCsvData = (
   plans: ConstructionPlanItem[],
   projects: ProjectItem[],
   groupLabel?: 'GOV' | 'INTERNAL' | 'ALL'
-): void => {
+): { fileName: string; csvContent: string } => {
   const isPlanInternal = (plan: ConstructionPlanItem) => {
     const prj = projects.find((p) => p.projectId === plan.projectId);
     if (prj) {
@@ -295,8 +295,17 @@ export const exportConstructionPlansCsv = (
 
   const titleSuffix = groupLabel === 'GOV' ? 'GOV' : groupLabel === 'INTERNAL' ? 'Internal' : 'Semua';
   const fileName = `JWS_Construction_${titleSuffix}_Export_${new Date().toISOString().slice(0, 10)}.csv`;
-
   const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+
+  return { fileName, csvContent };
+};
+
+export const exportConstructionPlansCsv = (
+  plans: ConstructionPlanItem[],
+  projects: ProjectItem[],
+  groupLabel?: 'GOV' | 'INTERNAL' | 'ALL'
+): void => {
+  const { fileName, csvContent } = generateConstructionPlansCsvData(plans, projects, groupLabel);
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -307,3 +316,126 @@ export const exportConstructionPlansCsv = (
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
+
+export const generateSurveyDocsCsvData = (
+  plans: ConstructionPlanItem[],
+  projects: ProjectItem[],
+  groupLabel?: 'GOV' | 'INTERNAL' | 'ALL'
+): { fileName: string; csvContent: string } => {
+  const isPlanInternal = (plan: ConstructionPlanItem) => {
+    const prj = projects.find((p) => p.projectId === plan.projectId);
+    if (prj) {
+      return prj.projectCategory === 'Project Internal' || prj.projectCategory === 'INTERNAL';
+    }
+    return plan.projectId?.startsWith('PRJ-INT') || false;
+  };
+
+  const filtered = plans.filter((p) => {
+    if (groupLabel === 'GOV') return !isPlanInternal(p);
+    if (groupLabel === 'INTERNAL') return isPlanInternal(p);
+    return true;
+  });
+
+  const headers = [
+    'Project ID',
+    'Nama Proyek',
+    'Kategori Group',
+    'Kategori Spesifik',
+    'Nama ISP',
+    'Area Location',
+    'Tgl BA Survey',
+    '1. KMZ Trase Relokasi Status',
+    'Link Download KMZ',
+    '2. APD Relokasi Status',
+    'Link Download APD',
+    '3. Timeline Pelaksana Status',
+    'Link Download Timeline',
+    '4. Surat Perintah Dinas Status',
+    'Link Download Surat Perintah',
+    '5. BA Survey Bersama Status',
+    'Link Download BA Survey',
+    '6. Surat Penunjukan Vendor Status',
+    'Link Download Vendor',
+    '7. Surat Rekomtek Status',
+    'Link Download Rekomtek',
+    'Catatan / Remarks'
+  ];
+
+  const rows = filtered.map((plan) => {
+    const parentProject = projects.find((p) => p.projectId === plan.projectId);
+    const category = parentProject?.projectCategory || 'GOV APJATEL';
+    const internal = isPlanInternal(plan);
+    const groupCategory = internal ? 'Dokumen & Catatan Internal' : 'Dokumen & Catatan GOV';
+
+    const getDocStatus = (doc?: AttachedDocument | null) => (doc ? `ADA (${doc.fileName})` : 'BELUM');
+    const getDocLink = (doc?: AttachedDocument | null) => {
+      if (!doc) return '-';
+      if (doc.fileDataUrl && (doc.fileDataUrl.startsWith('http://') || doc.fileDataUrl.startsWith('https://'))) {
+        return doc.fileDataUrl;
+      }
+      const origin =
+        typeof window !== 'undefined' && window.location?.origin
+          ? window.location.origin
+          : 'https://jws-monitoring-project.vercel.app';
+      const file = doc.fileName || 'dokumen.pdf';
+      return `${origin}/?doc=${encodeURIComponent(file)}`;
+    };
+
+    const docKmz = plan.docKmz;
+    const docApd = plan.docApdRelokasi || plan.apdIsp;
+    const docTimeline = plan.docTimeline;
+    const docSuratPerintah = plan.docSuratPerintahRelokasi;
+    const docBaSurvey = plan.docBaSurveyBersama || plan.baSurvey;
+    const docVendor = plan.docSuratPenunjukanVendor;
+    const docRekomtek = plan.docSuratRekomtek;
+
+    return [
+      `"${plan.projectId}"`,
+      `"${(plan.projectName || parentProject?.projectDescription || '-').replace(/"/g, '""')}"`,
+      `"${groupCategory}"`,
+      `"${category}"`,
+      `"${plan.namaIsp.replace(/"/g, '""')}"`,
+      `"${(parentProject?.areaLocation || '-').replace(/"/g, '""')}"`,
+      `"${plan.tanggalBaSurvey || '-'}"`,
+      `"${getDocStatus(docKmz)}"`,
+      `"${getDocLink(docKmz).replace(/"/g, '""')}"`,
+      `"${getDocStatus(docApd)}"`,
+      `"${getDocLink(docApd).replace(/"/g, '""')}"`,
+      `"${getDocStatus(docTimeline)}"`,
+      `"${getDocLink(docTimeline).replace(/"/g, '""')}"`,
+      `"${getDocStatus(docSuratPerintah)}"`,
+      `"${getDocLink(docSuratPerintah).replace(/"/g, '""')}"`,
+      `"${getDocStatus(docBaSurvey)}"`,
+      `"${getDocLink(docBaSurvey).replace(/"/g, '""')}"`,
+      `"${getDocStatus(docVendor)}"`,
+      `"${getDocLink(docVendor).replace(/"/g, '""')}"`,
+      `"${getDocStatus(docRekomtek)}"`,
+      `"${getDocLink(docRekomtek).replace(/"/g, '""')}"`,
+      `"${(plan.remarks || '').replace(/"/g, '""')}"`
+    ].join(',');
+  });
+
+  const titleSuffix = groupLabel === 'GOV' ? 'GOV' : groupLabel === 'INTERNAL' ? 'Internal' : 'Semua';
+  const fileName = `JWS_Survey_Dokumen_Catatan_${titleSuffix}_Export_${new Date().toISOString().slice(0, 10)}.csv`;
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+
+  return { fileName, csvContent };
+};
+
+export const exportSurveyDocsCsv = (
+  plans: ConstructionPlanItem[],
+  projects: ProjectItem[],
+  groupLabel?: 'GOV' | 'INTERNAL' | 'ALL'
+): void => {
+  const { fileName, csvContent } = generateSurveyDocsCsvData(plans, projects, groupLabel);
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', fileName);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+

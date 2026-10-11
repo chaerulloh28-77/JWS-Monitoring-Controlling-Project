@@ -33,10 +33,11 @@ import {
   Globe2,
   FileSpreadsheet,
   FileText,
-  ShieldCheck
+  ShieldCheck,
+  Mail
 } from 'lucide-react';
-import {
-  ConstructionPlanItem,
+import { ShareEmailModal } from './ShareEmailModal';
+import { ConstructionPlanItem,
   ProjectItem,
   FoCableType,
   ManholeType,
@@ -114,6 +115,7 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
     }
   };
   const [searchTerm, setSearchTerm] = useState('');
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [selectedIsp, setSelectedIsp] = useState<string>('ALL');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('ALL');
   const [selectedSapFilter, setSelectedSapFilter] = useState<string>('ALL');
@@ -950,8 +952,18 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
             </button>
           </div>
 
-          {/* Export CSV Buttons */}
+          {/* Export CSV & Email Sharing Buttons */}
           <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-mono font-bold text-xs shadow-md shadow-emerald-500/20 transition-all finger-click"
+              title="Kirim Berkas Dokumen & Catatan via Email"
+            >
+              <Mail className="w-4 h-4 text-slate-950 shrink-0" />
+              <span>Kirim via Email</span>
+            </button>
+
             <button
               type="button"
               onClick={() => exportConstructionPlansCsv(plans, projects, 'GOV')}
@@ -2441,244 +2453,30 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
             </div>
           </div>
 
-          {/* PANEL 5: SURVEY, DOKUMEN & REMARKS (7 BERKAS SEMUA JENIS FILE & EMAIL DISPATCH) */}
+          {/* PANEL 5: REMARKS & CATATAN CONSTRUCTION */}
           <div className="panel" style={{ '--glow': '#22ff9a' } as React.CSSProperties}>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 mb-4 border-b border-white/10">
-              <div className="flex items-center gap-2.5">
-                <div className="neon-icon size-8" style={{ '--glow': '#22ff9a' } as React.CSSProperties}>
-                  <FileCheck className="size-4 text-[#22ff9a]" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold tracking-wide uppercase font-mono text-white flex items-center gap-2">
-                    <span>Survey, Dokumen & Catatan</span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                    Upload 7 Berkas Resmi Proyek
-                  </p>
-                </div>
+            <div className="flex items-center gap-2.5 pb-3 mb-3 border-b border-white/10">
+              <div className="neon-icon size-8" style={{ '--glow': '#22ff9a' } as React.CSSProperties}>
+                <FileCheck className="size-4 text-[#22ff9a]" />
               </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-semibold">
-                  {totalUploadedDocsCount}/7 Dokumen Siap
-                </span>
+              <div>
+                <h3 className="text-sm font-bold tracking-wide uppercase font-mono text-white">
+                  Remarks & Catatan Construction
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Catatan instruksi, perizinan & status pekerjaan lapangan
+                </p>
               </div>
             </div>
 
-            <div className="space-y-5">
-              {/* Tanggal BA Survey */}
-              <div>
-                <label className="label">Tanggal BA Survey (Dinas & All ISP)</label>
-                <input
-                  type="date"
-                  className="field sm:w-64 font-mono cursor-pointer"
-                  value={surveyDate}
-                  onChange={(e) => setSurveyDate(e.target.value)}
-                />
-              </div>
-
-              {/* 7 DOKUMEN UPLOAD GRID (SEMUA JENIS FILE) */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between pb-1 border-b border-white/5">
-                  <span className="text-xs font-bold font-mono text-emerald-300 uppercase tracking-wide">
-                    Daftar 7 Berkas Survey, Dokumen & Catatan (Semua Jenis File):
-                  </span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Format Bebas: KMZ, KML, PDF, XLSX, DWG, DOCX, ZIP, dll
-                  </span>
-                </div>
-
-                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
-                  {[
-                    {
-                      key: 'kmz',
-                      title: '1. Upload KMZ',
-                      desc: 'File peta trase geospasial (.kmz, .kml, dll)',
-                      doc: docKmz,
-                      category: 'KMZ' as DocumentCategory,
-                      ref: kmzInputRef,
-                      onClear: () => setDocKmz(null)
-                    },
-                    {
-                      key: 'apdRelokasi',
-                      title: '2. Upload APD Relokasi',
-                      desc: 'As-Planned Drawing utilitas (.pdf, .dwg, dll)',
-                      doc: docApdRelokasi || apdFile,
-                      category: 'APD Relokasi' as DocumentCategory,
-                      ref: apdRelokasiInputRef,
-                      onClear: () => {
-                        setDocApdRelokasi(null);
-                        setApdFile(null);
-                      }
-                    },
-                    {
-                      key: 'timeline',
-                      title: '3. Upload Timeline Pelaksana',
-                      desc: 'Kurva S & jadwal kontraktor (.xlsx, .pdf, dll)',
-                      doc: docTimeline,
-                      category: 'Timeline Pelaksana' as DocumentCategory,
-                      ref: timelineInputRef,
-                      onClear: () => setDocTimeline(null)
-                    },
-                    {
-                      key: 'suratPerintah',
-                      title: '4. Upload Surat Perintah Relokasi',
-                      desc: 'Instruksi resmi Dinas Bina Marga (.pdf, .doc, dll)',
-                      doc: docSuratPerintahRelokasi,
-                      category: 'Surat Perintah Relokasi (Dinas)' as DocumentCategory,
-                      ref: suratPerintahInputRef,
-                      onClear: () => setDocSuratPerintahRelokasi(null)
-                    },
-                    {
-                      key: 'baSurveyBersama',
-                      title: '5. Upload BA Survey Bersama',
-                      desc: 'BA kesepakatan Dinas & All ISP (.pdf, dll)',
-                      doc: docBaSurveyBersama || baSurveyFile,
-                      category: 'BA Survey Bersama' as DocumentCategory,
-                      ref: baSurveyBersamaInputRef,
-                      onClear: () => {
-                        setDocBaSurveyBersama(null);
-                        setBaSurveyFile(null);
-                      }
-                    },
-                    {
-                      key: 'suratPenunjukanVendor',
-                      title: '6. Upload Surat Penunjukan Vendor',
-                      desc: 'SPK / penetapan vendor rekanan (.pdf, dll)',
-                      doc: docSuratPenunjukanVendor,
-                      category: 'Surat Penunjukan Vendor' as DocumentCategory,
-                      ref: suratPenunjukanInputRef,
-                      onClear: () => setDocSuratPenunjukanVendor(null)
-                    },
-                    {
-                      key: 'suratRekomtek',
-                      title: '7. Surat Rekomtek',
-                      desc: 'Rekomendasi teknis Dinas (Semua jenis file)',
-                      doc: docSuratRekomtek,
-                      category: 'Surat Rekomtek' as DocumentCategory,
-                      ref: suratRekomtekInputRef,
-                      onClear: () => setDocSuratRekomtek(null)
-                    }
-                  ].map((item) => (
-                    <div
-                      key={item.key}
-                      className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between ${
-                        item.doc
-                          ? 'bg-emerald-950/15 border-emerald-500/40 shadow-sm'
-                          : 'bg-white/[0.02] border-white/10 hover:border-white/20'
-                      }`}
-                    >
-                      <div>
-                        {/* Card Header */}
-                        <div className="flex items-center justify-between pb-2 border-b border-white/5 mb-2">
-                          <span className="text-xs font-bold font-mono text-white flex items-center gap-1.5">
-                            {getDocumentIcon(item.category, item.doc?.fileName)}
-                            <span className="truncate" title={item.title}>
-                              {item.title}
-                            </span>
-                          </span>
-                          {item.doc ? (
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                              Terupload
-                            </span>
-                          ) : (
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-300 border border-yellow-500/30">
-                              Belum Upload
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-mono mb-3 line-clamp-1" title={item.desc}>
-                          {item.desc}
-                        </p>
-
-                        {/* Uploaded File Info or Empty State */}
-                        {item.doc ? (
-                          <div className="p-2.5 rounded-lg bg-black/50 border border-emerald-500/20 space-y-1.5 mb-3">
-                            <div className="text-xs font-semibold text-white truncate" title={item.doc.fileName}>
-                              {item.doc.fileName}
-                            </div>
-                            <div className="text-[10px] text-slate-400 font-mono flex items-center justify-between">
-                              <span>{item.doc.fileSize}</span>
-                              <span className="text-slate-500">{item.doc.uploadedAt}</span>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-
-                      {/* Action buttons */}
-                      <div>
-                        <input
-                          ref={item.ref}
-                          type="file"
-                          accept="*/*"
-                          className="hidden"
-                          onChange={(e) =>
-                            e.target.files?.[0] && handleUniversalFileUpload(e.target.files[0], item.category)
-                          }
-                        />
-
-                        {item.doc ? (
-                          <div className="flex items-center gap-1.5 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => triggerDownloadDocument(item.doc!)}
-                              className="flex-1 py-1 px-2 rounded-lg text-[11px] font-mono text-emerald-300 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 transition-colors flex items-center justify-center gap-1 finger-click font-semibold"
-                              title={`Unduh ${item.doc.fileName}`}
-                            >
-                              <Download className="size-3" />
-                              <span>Unduh</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onViewPdf(item.doc!)}
-                              className="p-1 text-slate-300 hover:text-cyan-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 rounded-lg transition-colors finger-click"
-                              title="Lihat Pratinjau Dokumen"
-                            >
-                              <Eye className="size-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => item.ref.current?.click()}
-                              className="p-1 text-slate-300 hover:text-yellow-300 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 rounded-lg transition-colors finger-click"
-                              title="Ganti Berkas"
-                            >
-                              <FileUp className="size-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={item.onClear}
-                              className="p-1 text-slate-400 hover:text-rose-400 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 rounded-lg transition-colors finger-click"
-                              title="Hapus Berkas"
-                            >
-                              <X className="size-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => item.ref.current?.click()}
-                            className="w-full py-2.5 px-3 rounded-lg border border-dashed border-white/15 bg-white/[0.02] hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-emerald-300 text-slate-400 transition-all flex items-center justify-center gap-1.5 text-xs font-mono finger-click"
-                          >
-                            <FileUp className="size-3.5" />
-                            <span>Pilih Berkas ({item.category})</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Remarks (teks area) */}
-              <div>
-                <label className="label">Remarks & Catatan Tambahan</label>
-                <textarea
-                  className="field min-h-[110px] rounded-xl font-mono text-xs"
-                  placeholder="Catatan tambahan teknis, perizinan, atau instruksi lapangan…"
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                />
-              </div>
+            <div>
+              <label className="label">Remarks & Catatan Lapangan</label>
+              <textarea
+                className="field min-h-[100px] rounded-xl font-mono text-xs"
+                placeholder="Catatan tambahan teknis, perizinan, atau instruksi lapangan…"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+              />
             </div>
           </div>
 
@@ -3521,7 +3319,15 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
         </div>
       )}
 
-
+      {/* Share Email Modal */}
+      <ShareEmailModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        projects={projects}
+        plans={plans}
+        defaultGroupFilter={mainGroupFilter}
+        showToast={onShowToast || (() => {})}
+      />
     </div>
   );
 };

@@ -15,7 +15,8 @@ import {
   Layers,
   Shield,
   Building2,
-  ShieldCheck
+  ShieldCheck,
+  FileText
 } from 'lucide-react';
 import { ActiveTab } from '../types';
 
@@ -30,6 +31,7 @@ interface SidebarProps {
   onOpenNewConstruction?: () => void;
   projectGroupFilter?: 'GOV' | 'INTERNAL' | 'ALL';
   constructionGroupFilter?: 'GOV' | 'INTERNAL' | 'ALL';
+  surveyGroupFilter?: 'GOV' | 'INTERNAL' | 'ALL';
   gisGroupFilter?: 'GOV' | 'INTERNAL' | 'ALL';
   analyticsGroupFilter?: 'GOV' | 'INTERNAL' | 'ALL';
 }
@@ -45,12 +47,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenNewConstruction,
   projectGroupFilter = 'GOV',
   constructionGroupFilter = 'GOV',
+  surveyGroupFilter = 'GOV',
   gisGroupFilter = 'GOV',
   analyticsGroupFilter = 'GOV'
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     projects: true,
     construction: true,
+    survey_docs: true,
     gis_map: true,
     analytics: true
   });
@@ -267,6 +271,81 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                   <ShieldCheck className="size-3.5 text-indigo-400" />
                   <span>2. Construction Internal</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 4. Survey, Dokumen & Catatan */}
+          <div className="space-y-1">
+            <div
+              className={`w-full flex items-center justify-between rounded-xl p-2.5 transition-all relative ${
+                activeTab === 'survey_docs'
+                  ? 'bg-white/[0.06] border border-[#22c55e]/50 text-white shadow-lg shadow-[#22c55e]/15'
+                  : 'text-slate-400 hover:text-white hover:bg-white/[0.03] border border-transparent'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onTabChange('survey_docs')}
+                className="flex items-center flex-1 text-left min-w-0 finger-click"
+                title="Buka Survey, Dokumen & Catatan"
+              >
+                <div
+                  className="neon-icon size-9 shrink-0"
+                  style={{ '--glow': '#22c55e' } as React.CSSProperties}
+                >
+                  <FileText className="size-4 text-[#22c55e]" />
+                </div>
+                {!isCollapsed && (
+                  <div className="ml-3 flex-1 overflow-hidden">
+                    <span className="text-xs font-bold tracking-wide text-white block">
+                      Survey, Dokumen & Catatan
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Arsip BA, Rekomtek & Catatan
+                    </span>
+                  </div>
+                )}
+              </button>
+              {!isCollapsed && (
+                <button
+                  type="button"
+                  onClick={(e) => toggleSection('survey_docs', e)}
+                  className="p-1 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors shrink-0"
+                  title={openSections.survey_docs ? 'Tutup Submenu' : 'Buka Submenu'}
+                >
+                  {openSections.survey_docs ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                </button>
+              )}
+            </div>
+
+            {/* Submenu Survey & Dokumen */}
+            {!isCollapsed && openSections.survey_docs && (
+              <div className="pl-6 pr-2 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => onTabChange('survey_docs', 'GOV')}
+                  className={`w-full text-left flex items-center gap-2 py-1.5 px-3 rounded-lg text-xs font-mono transition-colors finger-click ${
+                    activeTab === 'survey_docs' && surveyGroupFilter === 'GOV'
+                      ? 'bg-emerald-950/80 border border-emerald-500/60 text-emerald-300 font-bold'
+                      : 'text-slate-400 hover:text-emerald-300 hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <Building2 className="size-3.5 text-emerald-400" />
+                  <span>1. Dokumen & Catatan GOV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTabChange('survey_docs', 'INTERNAL')}
+                  className={`w-full text-left flex items-center gap-2 py-1.5 px-3 rounded-lg text-xs font-mono transition-colors finger-click ${
+                    activeTab === 'survey_docs' && surveyGroupFilter === 'INTERNAL'
+                      ? 'bg-indigo-950/80 border border-indigo-500/60 text-indigo-300 font-bold'
+                      : 'text-slate-400 hover:text-indigo-300 hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <ShieldCheck className="size-3.5 text-indigo-400" />
+                  <span>2. Dokumen & Catatan Internal</span>
                 </button>
               </div>
             )}

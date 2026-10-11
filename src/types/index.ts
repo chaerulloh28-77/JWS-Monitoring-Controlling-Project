@@ -256,4 +256,4 @@ export interface AuthUser {
   lastLogin: string;
 }
 
-export type ActiveTab = 'overview' | 'projects' | 'construction' | 'gis_map' | 'analytics';
+export type ActiveTab = 'overview' | 'projects' | 'construction' | 'survey_docs' | 'gis_map' | 'analytics';

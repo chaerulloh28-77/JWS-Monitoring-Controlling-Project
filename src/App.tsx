@@ -28,6 +28,7 @@ import { Sidebar } from './components/Sidebar';
 import { DashboardOverview } from './components/DashboardOverview';
 import { ProjectList } from './components/ProjectList';
 import { ConstructionPlan } from './components/ConstructionPlan';
+import { SurveyDocumentsView } from './components/SurveyDocumentsView';
 import { GisMapOverview } from './components/GisMapOverview';
 import { AnalyticsView } from './components/AnalyticsView';
 import { PdfViewerModal } from './components/PdfViewerModal';
@@ -47,9 +48,38 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activePdfDocument, setActivePdfDocument] = useState<AttachedDocument | null>(null);
 
+  // Auto-open document when shared link with ?doc=... parameter is clicked from CSV
+  useEffect(() => {
+    if (!plans || plans.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const docQuery = params.get('doc');
+    if (docQuery) {
+      const decodedName = decodeURIComponent(docQuery);
+      for (const plan of plans) {
+        const docs = [
+          plan.docKmz,
+          plan.docApdRelokasi || plan.apdIsp,
+          plan.docTimeline,
+          plan.docSuratPerintahRelokasi,
+          plan.docBaSurveyBersama || plan.baSurvey,
+          plan.docSuratPenunjukanVendor,
+          plan.docSuratRekomtek
+        ];
+        const matched = docs.find((d) => d && d.fileName === decodedName);
+        if (matched) {
+          setActivePdfDocument(matched);
+          setActiveTab('survey_docs');
+          showToast('info', 'Membuka Dokumen CSV', `Menampilkan berkas: ${matched.fileName}`);
+          break;
+        }
+      }
+    }
+  }, [plans]);
+
   // Group filter state per view tab ('GOV' | 'INTERNAL' | 'ALL')
   const [projectGroupFilter, setProjectGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>('GOV');
   const [constructionGroupFilter, setConstructionGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>('GOV');
+  const [surveyGroupFilter, setSurveyGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>('GOV');
   const [gisGroupFilter, setGisGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>('GOV');
   const [analyticsGroupFilter, setAnalyticsGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>('GOV');
 
@@ -58,6 +88,7 @@ export default function App() {
     if (group) {
       if (tab === 'projects') setProjectGroupFilter(group);
       if (tab === 'construction') setConstructionGroupFilter(group);
+      if (tab === 'survey_docs') setSurveyGroupFilter(group);
       if (tab === 'gis_map') setGisGroupFilter(group);
       if (tab === 'analytics') setAnalyticsGroupFilter(group);
     }
@@ -226,6 +257,7 @@ export default function App() {
           constructionCount={plans.length}
           projectGroupFilter={projectGroupFilter}
           constructionGroupFilter={constructionGroupFilter}
+          surveyGroupFilter={surveyGroupFilter}
           gisGroupFilter={gisGroupFilter}
           analyticsGroupFilter={analyticsGroupFilter}
           onOpenNewProject={() => {
@@ -286,6 +318,18 @@ export default function App() {
                 onShowToast={showToast}
                 mainGroupFilter={constructionGroupFilter}
                 onMainGroupFilterChange={setConstructionGroupFilter}
+              />
+            )}
+
+            {activeTab === 'survey_docs' && (
+              <SurveyDocumentsView
+                projects={projects}
+                plans={plans}
+                groupFilter={surveyGroupFilter}
+                onSavePlan={handleSavePlan}
+                onViewPdf={(doc) => setActivePdfDocument(doc)}
+                showToast={showToast}
+                onGroupFilterChange={setSurveyGroupFilter}
               />
             )}
 
