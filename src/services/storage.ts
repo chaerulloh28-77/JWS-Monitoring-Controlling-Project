@@ -11,18 +11,18 @@ const STORAGE_KEYS = {
 export const getStoredProjects = (): ProjectItem[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.PROJECTS);
-    if (raw) {
+    if (raw !== null) {
       return JSON.parse(raw);
     }
   } catch (err) {
     console.error('Failed to parse projects from storage', err);
   }
   try {
-    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify(INITIAL_PROJECTS));
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify([]));
   } catch (e) {
     console.warn('Could not store initial projects', e);
   }
-  return INITIAL_PROJECTS;
+  return [];
 };
 
 export const saveProjects = (projects: ProjectItem[]): void => {
@@ -34,15 +34,63 @@ export const saveProjects = (projects: ProjectItem[]): void => {
   }
 };
 
+import { saveDocumentToIDB, getDocumentFromIDB } from '../utils/indexedDB';
+
 const sanitizeAttachedDoc = (doc?: AttachedDocument | null): AttachedDocument | null | undefined => {
   if (!doc) return doc;
-  if (doc.fileDataUrl && doc.fileDataUrl.length > 50000) {
-    return {
-      ...doc,
-      fileDataUrl: doc.fileDataUrl.slice(0, 100) + '...[file data truncated for storage]'
-    };
+  // Preserve doc metadata, save payload to IndexedDB
+  if (doc.fileDataUrl && doc.id) {
+    saveDocumentToIDB(doc.id, doc.fileDataUrl);
   }
-  return doc;
+  // Strip large fileDataUrl only if needed for localStorage quota fallback
+  return {
+    ...doc,
+    fileDataUrl: doc.fileDataUrl && doc.fileDataUrl.length < 500000 ? doc.fileDataUrl : undefined
+  };
+};
+
+import { deleteDocumentFromIDB, clearIndexedDB } from '../utils/indexedDB';
+
+export const clearAllApplicationData = async (): Promise<void> => {
+  try {
+    localStorage.setItem(STORAGE_KEYS.PROJECTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.CONSTRUCTION, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
+    await clearIndexedDB();
+  } catch (err) {
+    console.warn('Error clearing application data:', err);
+  }
+};
+
+export const deduplicatePlans = (plans: ConstructionPlanItem[]): ConstructionPlanItem[] => {
+  if (!Array.isArray(plans)) return [];
+  
+  const seenIds = new Set<string>();
+  const seenSemuaOperatorProjectKeys = new Set<string>();
+  const result: ConstructionPlanItem[] = [];
+
+  for (const plan of plans) {
+    if (!plan || !plan.id) continue;
+    
+    // Deduplicate exact duplicate IDs
+    if (seenIds.has(plan.id)) continue;
+
+    // Check for "Semua Operator ISP" duplicate piling
+    const normIsp = (plan.namaIsp || '').trim().toLowerCase();
+    if (normIsp === 'semua operator isp' || normIsp === 'semua operator') {
+      const projKey = `${plan.projectId || 'ALL'}_${normIsp}`;
+      if (seenSemuaOperatorProjectKeys.has(projKey)) {
+        // Remove duplicate "Semua Operator ISP" entry for this project
+        continue;
+      }
+      seenSemuaOperatorProjectKeys.add(projKey);
+    }
+
+    seenIds.add(plan.id);
+    result.push(plan);
+  }
+
+  return result;
 };
 
 const sanitizePlansForStorage = (plans: ConstructionPlanItem[]): ConstructionPlanItem[] => {
@@ -52,8 +100,10 @@ const sanitizePlansForStorage = (plans: ConstructionPlanItem[]): ConstructionPla
     baSurvey: sanitizeAttachedDoc(plan.baSurvey),
     docKmz: sanitizeAttachedDoc(plan.docKmz),
     docApdRelokasi: sanitizeAttachedDoc(plan.docApdRelokasi),
+    docApdIsp: sanitizeAttachedDoc(plan.docApdIsp),
     docTimeline: sanitizeAttachedDoc(plan.docTimeline),
     docSuratPerintahRelokasi: sanitizeAttachedDoc(plan.docSuratPerintahRelokasi),
+    docBaSurveyInternal: sanitizeAttachedDoc(plan.docBaSurveyInternal),
     docBaSurveyBersama: sanitizeAttachedDoc(plan.docBaSurveyBersama),
     docSuratPenunjukanVendor: sanitizeAttachedDoc(plan.docSuratPenunjukanVendor),
     docSuratRekomtek: sanitizeAttachedDoc(plan.docSuratRekomtek)
@@ -63,28 +113,36 @@ const sanitizePlansForStorage = (plans: ConstructionPlanItem[]): ConstructionPla
 export const getStoredConstructionPlans = (): ConstructionPlanItem[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CONSTRUCTION);
-    if (raw) {
-      return JSON.parse(raw);
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const cleaned = deduplicatePlans(parsed);
+        if (cleaned.length !== parsed.length) {
+          saveConstructionPlans(cleaned);
+        }
+        return cleaned;
+      }
     }
   } catch (err) {
     console.error('Failed to parse construction plans from storage', err);
   }
   try {
-    localStorage.setItem(STORAGE_KEYS.CONSTRUCTION, JSON.stringify(INITIAL_CONSTRUCTION_PLANS));
+    localStorage.setItem(STORAGE_KEYS.CONSTRUCTION, JSON.stringify([]));
   } catch (e) {
     console.warn('Could not store initial construction plans', e);
   }
-  return INITIAL_CONSTRUCTION_PLANS;
+  return [];
 };
 
 export const saveConstructionPlans = (plans: ConstructionPlanItem[]): void => {
   try {
-    localStorage.setItem(STORAGE_KEYS.CONSTRUCTION, JSON.stringify(plans));
+    const deduplicated = deduplicatePlans(plans);
+    localStorage.setItem(STORAGE_KEYS.CONSTRUCTION, JSON.stringify(deduplicated));
     localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
   } catch (err) {
     console.warn('Quota exceeded when saving construction plans. Sanitizing large file payloads...', err);
     try {
-      const sanitized = sanitizePlansForStorage(plans);
+      const sanitized = sanitizePlansForStorage(deduplicatePlans(plans));
       localStorage.setItem(STORAGE_KEYS.CONSTRUCTION, JSON.stringify(sanitized));
       localStorage.setItem(STORAGE_KEYS.LAST_SYNC, new Date().toISOString());
     } catch (retryErr) {
@@ -352,8 +410,8 @@ export const generateSurveyDocsCsvData = (
     'Link Download Timeline',
     '4. Surat Perintah Dinas Status',
     'Link Download Surat Perintah',
-    '5. BA Survey Bersama Status',
-    'Link Download BA Survey',
+    '5. BA Survey Internal ( ISP ) Status',
+    'Link Download BA Survey Internal ( ISP )',
     '6. Surat Penunjukan Vendor Status',
     'Link Download Vendor',
     '7. Surat Rekomtek Status',

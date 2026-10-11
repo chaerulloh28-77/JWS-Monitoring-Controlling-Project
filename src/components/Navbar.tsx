@@ -1,5 +1,5 @@
 import React from 'react';
-import { Radio, RefreshCw, LogOut, Clock, Download } from 'lucide-react';
+import { Radio, RefreshCw, LogOut, Clock, Download, Trash2 } from 'lucide-react';
 import { AuthUser } from '../types';
 
 interface NavbarProps {
@@ -7,6 +7,7 @@ interface NavbarProps {
   onLogout: () => void;
   onRefreshData: () => void;
   onExportData: () => void;
+  onClearData?: () => void;
   lastSyncTime: string;
   isRealtimeActive: boolean;
   onToggleRealtime: () => void;
@@ -17,6 +18,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   onRefreshData,
   onExportData,
+  onClearData,
   lastSyncTime,
   isRealtimeActive,
   onToggleRealtime
@@ -81,6 +83,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           <Download className="w-3.5 h-3.5 text-purple-400" />
           <span className="whitespace-nowrap">Backup Data</span>
         </button>
+
+        {onClearData && (
+          <button
+            onClick={onClearData}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-950/40 border border-rose-800/50 text-rose-300 hover:text-rose-100 hover:bg-rose-900/60 transition-colors finger-click"
+            title="Kosongkan dan bersihkan seluruh data aplikasi"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span className="whitespace-nowrap">Kosongkan Data</span>
+          </button>
+        )}
       </div>
 
       {/* Zone 3: 1 primary action / User profile & logout */}

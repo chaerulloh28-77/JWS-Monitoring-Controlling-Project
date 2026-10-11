@@ -1,14 +1,16 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import sendEmailHandler from './api/send-email.js';
+import extractBaSurveyHandler from './api/extract-ba-survey.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '50mb' }));
 
-// API Endpoint for sending email with CSV & document attachments (delegated to Vercel Serverless Function)
+// API Endpoints
 app.post('/api/send-email', (req, res) => sendEmailHandler(req, res));
+app.post('/api/extract-ba-survey', (req, res) => extractBaSurveyHandler(req, res));
 
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

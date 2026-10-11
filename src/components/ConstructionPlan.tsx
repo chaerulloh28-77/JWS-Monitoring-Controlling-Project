@@ -63,6 +63,7 @@ import {
   triggerDownloadDocument,
   getDocumentIcon
 } from '../utils/documentUtils';
+import { saveDocumentToIDB } from '../utils/indexedDB';
 
 interface ConstructionPlanProps {
   plans: ConstructionPlanItem[];
@@ -590,9 +591,20 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
     setViewMode('form');
   };
 
-  // Universal file upload handler for all 7 document types (Semua Jenis File)
+  // Universal file upload handler for all 7 document types (Maksimal 4 MB)
   const handleUniversalFileUpload = (file: File, docType: DocumentCategory) => {
     if (!file) return;
+
+    const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB Limit
+    if (file.size > MAX_FILE_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+      const errorMsg = `Ukuran berkas "${file.name}" (${sizeMB} MB) melebihi batas maksimum 4 MB. Silakan pilih berkas yang lebih kecil.`;
+      if (onShowToast) {
+        onShowToast('error', 'Ukuran Dokumen Terlalu Besar', errorMsg);
+      }
+      setFormError(errorMsg);
+      return;
+    }
 
     let formattedSize = '';
     if (file.size < 1024 * 1024) {
@@ -604,8 +616,13 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
+      const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      // Save to IndexedDB asynchronously
+      saveDocumentToIDB(docId, dataUrl);
+
       const newDoc: AttachedDocument = {
-        id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: docId,
         fileName: file.name,
         fileSize: formattedSize,
         uploadedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
@@ -857,15 +874,12 @@ export const ConstructionPlan: React.FC<ConstructionPlanProps> = ({
               <h2 className="text-lg font-bold tracking-tight text-white">
                 {viewMode === 'form' ? (editingPlanId ? 'Edit Data Construction' : 'Input Data Construction') : 'Construction'}
               </h2>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full border border-orange-500/40 bg-orange-500/10 text-orange-300">
-                CRUD & Realtime Kalkulasi
-              </span>
             </div>
-            <p className="text-xs text-slate-400">
-              {viewMode === 'form'
-                ? 'Input dan edit volume galian sipil, material kabel FO & COAX, infrastruktur pelengkap, dan progres otomatis'
-                : 'Pusat manajemen data konstruksi, terbagi menjadi 1. Construction GOV dan 2. Construction Internal'}
-            </p>
+            {viewMode === 'form' && (
+              <p className="text-xs text-slate-400">
+                Input dan edit volume galian sipil, material kabel FO & COAX, infrastruktur pelengkap, dan progres otomatis
+              </p>
+            )}
           </div>
         </div>
 

@@ -26,6 +26,7 @@ interface ShareEmailModalProps {
   projects: ProjectItem[];
   plans: ConstructionPlanItem[];
   defaultGroupFilter?: 'GOV' | 'INTERNAL' | 'ALL';
+  initialIsp?: string;
   showToast: (type: 'success' | 'error' | 'info' | 'warning', title: string, message: string) => void;
 }
 
@@ -47,23 +48,69 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
   projects,
   plans,
   defaultGroupFilter = 'GOV',
+  initialIsp = 'ALL',
   showToast
 }) => {
   const [groupFilter, setGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>(defaultGroupFilter);
+  const [selectedIspFilter, setSelectedIspFilter] = useState<string>(initialIsp);
   const [recipientEmail, setRecipientEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [customMessage, setCustomMessage] = useState('');
   const [includeCsv, setIncludeCsv] = useState(true);
   const [isSending, setIsSending] = useState(false);
 
-  // Sync group filter when modal opens
+  // Extract unique ISP list from plans
+  const uniqueIspList = useMemo(() => {
+    const isps = new Set<string>();
+    plans.forEach((p) => {
+      if (p.namaIsp) isps.add(p.namaIsp);
+    });
+    return Array.from(isps).sort();
+  }, [plans]);
+
+  // Sync group filter & initial ISP when modal opens
   React.useEffect(() => {
     if (isOpen) {
       setGroupFilter(defaultGroupFilter);
+      const activeIsp = initialIsp || 'ALL';
+      setSelectedIspFilter(activeIsp);
+
       const titleLabel =
         defaultGroupFilter === 'GOV'
           ? 'GOV'
           : defaultGroupFilter === 'INTERNAL'
+          ? 'Internal'
+          : 'Semua (GOV & Internal)';
+
+      if (activeIsp !== 'ALL') {
+        const ispPlan = plans.find((p) => p.namaIsp === activeIsp);
+        setSubject(`Dokumen & Catatan Survey Lapangan - ISP ${activeIsp} (${ispPlan?.projectId || 'JWS Project'})`);
+        setCustomMessage(
+          `Yth. Tim / PIC ISP ${activeIsp},\n\nBerikut terlampir dokumen resmi & catatan hasil survey lapangan khusus untuk proyek ISP ${activeIsp}.\nAnda dapat mengunduh berkas & CSV rekapitulasi secara langsung melalui tombol/tautan yang terlampir.`
+        );
+      } else {
+        setSubject(`Dokumen & Catatan Survey ${titleLabel} - JWS Project`);
+        setCustomMessage(
+          `Yth. Tim / Mitra,\n\nBerikut terlampir dokumen & catatan survey lapangan untuk kategori ${titleLabel}.\nAnda dapat mengunduh file CSV rekapitulasi serta dokumen berkas langsung melalui link yang terlampir.`
+        );
+      }
+    }
+  }, [isOpen, defaultGroupFilter, initialIsp, plans]);
+
+  // Update subject and message when selectedIspFilter changes
+  const handleIspChange = (ispName: string) => {
+    setSelectedIspFilter(ispName);
+    if (ispName !== 'ALL') {
+      const ispPlan = plans.find((p) => p.namaIsp === ispName);
+      setSubject(`Dokumen & Catatan Survey Lapangan - ISP ${ispName} (${ispPlan?.projectId || 'JWS Project'})`);
+      setCustomMessage(
+        `Yth. Tim / PIC ISP ${ispName},\n\nBerikut terlampir dokumen resmi & catatan hasil survey lapangan khusus untuk proyek ISP ${ispName}.\nAnda dapat mengunduh berkas & CSV rekapitulasi secara langsung melalui tombol/tautan yang terlampir.`
+      );
+    } else {
+      const titleLabel =
+        groupFilter === 'GOV'
+          ? 'GOV'
+          : groupFilter === 'INTERNAL'
           ? 'Internal'
           : 'Semua (GOV & Internal)';
       setSubject(`Dokumen & Catatan Survey ${titleLabel} - JWS Project`);
@@ -71,7 +118,7 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
         `Yth. Tim / Mitra,\n\nBerikut terlampir dokumen & catatan survey lapangan untuk kategori ${titleLabel}.\nAnda dapat mengunduh file CSV rekapitulasi serta dokumen berkas langsung melalui link yang terlampir.`
       );
     }
-  }, [isOpen, defaultGroupFilter]);
+  };
 
   // Project Category Lookup Helper
   const isPlanInternal = (plan: ConstructionPlanItem) => {
@@ -82,15 +129,16 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
     return plan.projectId?.startsWith('PRJ-INT') || false;
   };
 
-  // Filter plans based on active groupFilter
+  // Filter plans based on active groupFilter AND selectedIspFilter
   const filteredPlans = useMemo(() => {
     return plans.filter((plan) => {
       const internal = isPlanInternal(plan);
-      if (groupFilter === 'GOV') return !internal;
-      if (groupFilter === 'INTERNAL') return internal;
+      if (groupFilter === 'GOV' && internal) return false;
+      if (groupFilter === 'INTERNAL' && !internal) return false;
+      if (selectedIspFilter !== 'ALL' && plan.namaIsp !== selectedIspFilter) return false;
       return true;
     });
-  }, [plans, projects, groupFilter]);
+  }, [plans, projects, groupFilter, selectedIspFilter]);
 
   // Collect all available attached documents for filtered plans
   const availableDocs = useMemo(() => {
@@ -107,7 +155,7 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
         { key: 'APD', label: '2. APD Relokasi', doc: plan.docApdRelokasi || plan.apdIsp },
         { key: 'TIMELINE', label: '3. Timeline Pelaksanaan', doc: plan.docTimeline },
         { key: 'SURAT_PERINTAH', label: '4. Surat Perintah Relokasi', doc: plan.docSuratPerintahRelokasi },
-        { key: 'BA_SURVEY', label: '5. BA Survey Bersama', doc: plan.docBaSurveyBersama || plan.baSurvey },
+        { key: 'BA_SURVEY', label: '5. BA Survey Internal ( ISP )', doc: plan.docBaSurveyBersama || plan.baSurvey },
         { key: 'VENDOR', label: '6. Surat Penunjukan Vendor', doc: plan.docSuratPenunjukanVendor },
         { key: 'REKOMTEK', label: '7. Surat Rekomtek', doc: plan.docSuratRekomtek }
       ];
@@ -305,59 +353,86 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
-          {/* Group Category Selector */}
-          <div>
-            <label className="block text-xs font-mono text-slate-400 mb-2">
-              1. Pilih Kategori Data yang Ingin Bagikan:
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => setGroupFilter('GOV')}
-                className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
-                  groupFilter === 'GOV'
-                    ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-lg shadow-emerald-500/10'
-                    : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
-                }`}
-              >
-                <Building2 className={`size-5 ${groupFilter === 'GOV' ? 'text-emerald-400' : 'text-slate-500'}`} />
-                <div>
-                  <div className="text-xs font-bold font-mono">Dokumen GOV</div>
-                  <div className="text-[10px] text-slate-400">Target GOV APJATEL</div>
-                </div>
-              </button>
+          {/* Group Category & ISP Filter Selector */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-mono text-slate-400 mb-2">
+                1. Kategori Data Proyek:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGroupFilter('GOV')}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
+                    groupFilter === 'GOV'
+                      ? 'bg-emerald-500/20 border-emerald-500 text-white shadow-lg shadow-emerald-500/10'
+                      : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
+                  }`}
+                >
+                  <Building2 className={`size-4 ${groupFilter === 'GOV' ? 'text-emerald-400' : 'text-slate-500'}`} />
+                  <div>
+                    <div className="text-xs font-bold font-mono">Dokumen GOV</div>
+                    <div className="text-[9px] text-slate-400">Target GOV APJATEL</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setGroupFilter('INTERNAL')}
-                className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
-                  groupFilter === 'INTERNAL'
-                    ? 'bg-indigo-500/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
-                    : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
-                }`}
-              >
-                <ShieldCheck className={`size-5 ${groupFilter === 'INTERNAL' ? 'text-indigo-400' : 'text-slate-500'}`} />
-                <div>
-                  <div className="text-xs font-bold font-mono">Dokumen Internal</div>
-                  <div className="text-[10px] text-slate-400">Target Project Internal</div>
-                </div>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setGroupFilter('INTERNAL')}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
+                    groupFilter === 'INTERNAL'
+                      ? 'bg-indigo-500/20 border-indigo-500 text-white shadow-lg shadow-indigo-500/10'
+                      : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
+                  }`}
+                >
+                  <ShieldCheck className={`size-4 ${groupFilter === 'INTERNAL' ? 'text-indigo-400' : 'text-slate-500'}`} />
+                  <div>
+                    <div className="text-xs font-bold font-mono">Dokumen Internal</div>
+                    <div className="text-[9px] text-slate-400">Target Project Internal</div>
+                  </div>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setGroupFilter('ALL')}
-                className={`p-3 rounded-xl border text-left transition-all flex items-center gap-3 ${
-                  groupFilter === 'ALL'
-                    ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-lg shadow-cyan-500/10'
-                    : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
-                }`}
+                <button
+                  type="button"
+                  onClick={() => setGroupFilter('ALL')}
+                  className={`p-2.5 rounded-xl border text-left transition-all flex items-center gap-2.5 ${
+                    groupFilter === 'ALL'
+                      ? 'bg-cyan-500/20 border-cyan-500 text-white shadow-lg shadow-cyan-500/10'
+                      : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
+                  }`}
+                >
+                  <Sparkles className={`size-4 ${groupFilter === 'ALL' ? 'text-cyan-400' : 'text-slate-500'}`} />
+                  <div>
+                    <div className="text-xs font-bold font-mono">Semua Dokumen</div>
+                    <div className="text-[9px] text-slate-400">GOV & Internal</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Target ISP Dropdown Filter */}
+            <div>
+              <label className="block text-xs font-mono text-cyan-400 font-bold mb-2 flex items-center gap-1.5">
+                <Building2 className="size-3.5" />
+                <span>2. Kirim Per Nama ISP:</span>
+              </label>
+              <select
+                value={selectedIspFilter}
+                onChange={(e) => handleIspChange(e.target.value)}
+                className="w-full bg-slate-900 border border-cyan-500/40 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-cyan-400 shadow-md shadow-cyan-500/10"
               >
-                <Sparkles className={`size-5 ${groupFilter === 'ALL' ? 'text-cyan-400' : 'text-slate-500'}`} />
-                <div>
-                  <div className="text-xs font-bold font-mono">Semua Dokumen</div>
-                  <div className="text-[10px] text-slate-400">Gabungan GOV & Internal</div>
-                </div>
-              </button>
+                <option value="ALL">Semua ISP (Rekapitulasi Total)</option>
+                {uniqueIspList.map((isp) => (
+                  <option key={isp} value={isp}>
+                    ISP Khusus: {isp}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] text-slate-400 font-mono">
+                {selectedIspFilter === 'ALL'
+                  ? 'Kirim rekapitulasi gabungan seluruh ISP'
+                  : `Filter otomatis dokumen & CSV hanya untuk ISP ${selectedIspFilter}`}
+              </p>
             </div>
           </div>
 

@@ -4,10 +4,30 @@ import { AttachedDocument } from '../types';
 
 export const triggerDownloadDocument = (doc: AttachedDocument) => {
   const link = window.document.createElement('a');
-  if (doc.fileDataUrl) {
+  let blobUrl: string | null = null;
+
+  if (doc.fileDataUrl && doc.fileDataUrl.startsWith('data:')) {
+    try {
+      const parts = doc.fileDataUrl.split(',');
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+      const bstr = atob(parts[1] || '');
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const blob = new Blob([u8arr], { type: mime });
+      blobUrl = URL.createObjectURL(blob);
+      link.href = blobUrl;
+    } catch (err) {
+      console.warn('Failed to parse data URL into Blob, using raw data URL instead:', err);
+      link.href = doc.fileDataUrl;
+    }
+  } else if (doc.fileDataUrl) {
     link.href = doc.fileDataUrl;
   } else {
-    // Generate valid downloadable blob content
+    // Generate valid downloadable blob content if file payload was not present
     const sampleContent =
       `=================================================================\n` +
       `DOKUMEN RESMI JWS COMMAND CENTER & DINAS BINA MARGA PROVINSI DKI\n` +
@@ -25,12 +45,20 @@ export const triggerDownloadDocument = (doc: AttachedDocument) => {
       `-----------------------------------------------------------------\n` +
       `Pusat Data Relokasi Utilitas Terpadu (SJUT/APJATEL/IPPJU DKI Jakarta)\n`;
     const blob = new Blob([sampleContent], { type: 'application/octet-stream' });
-    link.href = URL.createObjectURL(blob);
+    blobUrl = URL.createObjectURL(blob);
+    link.href = blobUrl;
   }
+
   link.download = doc.fileName;
   window.document.body.appendChild(link);
   link.click();
   window.document.body.removeChild(link);
+
+  if (blobUrl) {
+    setTimeout(() => {
+      URL.revokeObjectURL(blobUrl!);
+    }, 2000);
+  }
 };
 
 export const getDocumentIcon = (docType: string, fileName?: string) => {

@@ -593,9 +593,6 @@ export const InteractiveCharts: React.FC<InteractiveChartsProps> = ({
               Chart & Drill-Down
             </span>
           </div>
-          <p className="text-xs text-slate-400">
-            Visualisasi Grafik Bar Chart dan Pie Chart interaktif. <strong className="text-cyan-300">Klik pada bar atau slice pie</strong> untuk membuka rincian detail lengkap.
-          </p>
         </div>
 
         <div className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-[#0d162d] px-3.5 py-2 rounded-xl border border-slate-800">

@@ -130,12 +130,13 @@ export interface GalvanisItem {
 export type DocumentCategory =
   | 'KMZ'
   | 'APD Relokasi'
+  | 'APD ISP'
   | 'Timeline Pelaksana'
   | 'Surat Perintah Relokasi (Dinas)'
+  | 'BA Survey Internal ( ISP )'
   | 'BA Survey Bersama'
   | 'Surat Penunjukan Vendor'
   | 'Surat Rekomtek'
-  | 'APD ISP'
   | 'BA Survey';
 
 export interface AttachedDocument {
@@ -229,11 +230,13 @@ export interface ConstructionPlanItem {
   apdIsp?: AttachedDocument | null;
   baSurvey?: AttachedDocument | null;
 
-  // 7 Berkas Survey, Dokumen & Catatan (Semua Jenis File)
+  // 9 Berkas Survey, Dokumen & Catatan (Semua Jenis File)
   docKmz?: AttachedDocument | null;
   docApdRelokasi?: AttachedDocument | null;
+  docApdIsp?: AttachedDocument | null;
   docTimeline?: AttachedDocument | null;
   docSuratPerintahRelokasi?: AttachedDocument | null;
+  docBaSurveyInternal?: AttachedDocument | null;
   docBaSurveyBersama?: AttachedDocument | null;
   docSuratPenunjukanVendor?: AttachedDocument | null;
   docSuratRekomtek?: AttachedDocument | null;

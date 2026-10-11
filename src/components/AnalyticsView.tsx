@@ -14,7 +14,10 @@ import {
   Edit2,
   Trash2,
   Building2,
-  FolderGit2
+  FolderGit2,
+  Search,
+  Filter,
+  X
 } from 'lucide-react';
 import { ProjectItem, ConstructionPlanItem } from '../types';
 import { resetToInitialData, exportDataAsJson } from '../services/storage';
@@ -72,6 +75,10 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
     return pl.projectId?.startsWith('PRJ-INT') || false;
   };
 
+  const [analyticsSearchQuery, setAnalyticsSearchQuery] = useState('');
+  const [analyticsCategoryFilter, setAnalyticsCategoryFilter] = useState('ALL');
+  const [analyticsStatusFilter, setAnalyticsStatusFilter] = useState('ALL');
+
   const govAnalyticsCount = useMemo(() => {
     return projects.filter((p) => !isProjectInternal(p)).length;
   }, [projects]);
@@ -85,18 +92,42 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
       const internal = isProjectInternal(p);
       if (mainGroupFilter === 'GOV' && internal) return false;
       if (mainGroupFilter === 'INTERNAL' && !internal) return false;
+
+      if (analyticsCategoryFilter !== 'ALL' && p.projectCategory !== analyticsCategoryFilter) return false;
+      if (analyticsStatusFilter !== 'ALL' && p.projectStatus !== analyticsStatusFilter) return false;
+
+      if (analyticsSearchQuery.trim()) {
+        const q = analyticsSearchQuery.toLowerCase().trim();
+        const matchId = p.projectId.toLowerCase().includes(q);
+        const matchDesc = p.projectDescription.toLowerCase().includes(q);
+        const matchArea = p.areaLocation.toLowerCase().includes(q);
+        const matchPic = (p.picIsp || '').toLowerCase().includes(q);
+        if (!matchId && !matchDesc && !matchArea && !matchPic) return false;
+      }
+
       return true;
     });
-  }, [projects, mainGroupFilter]);
+  }, [projects, mainGroupFilter, analyticsCategoryFilter, analyticsStatusFilter, analyticsSearchQuery]);
 
   const filteredPlans = useMemo(() => {
+    const validProjectIds = new Set(filteredProjects.map((p) => p.projectId));
     return plans.filter((pl) => {
       const internal = isPlanInternal(pl);
       if (mainGroupFilter === 'GOV' && internal) return false;
       if (mainGroupFilter === 'INTERNAL' && !internal) return false;
+
+      if (validProjectIds.size > 0 && !validProjectIds.has(pl.projectId)) return false;
+
+      if (analyticsSearchQuery.trim()) {
+        const q = analyticsSearchQuery.toLowerCase().trim();
+        const matchIsp = pl.namaIsp.toLowerCase().includes(q);
+        const matchProj = pl.projectId.toLowerCase().includes(q);
+        if (!matchIsp && !matchProj) return false;
+      }
+
       return true;
     });
-  }, [plans, projects, mainGroupFilter]);
+  }, [plans, projects, filteredProjects, mainGroupFilter, analyticsSearchQuery]);
 
   // Calculate Cable Types Distribution
   const cableCoreCounts: Record<string, number> = {};
@@ -140,9 +171,6 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
               Statistik Infrastruktur
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Audit rincian pemanfaatan ruang bawah tanah, spesifikasi kabel fiber optik, dan keikutsertaan operator telekomunikasi
-          </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -246,6 +274,58 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             {projects.length}
           </span>
         </button>
+      </div>
+
+      {/* Interactive Filter Toolbar for Analytics & Control */}
+      <div className="p-3 rounded-2xl bg-[#091022] border border-slate-800 shadow-md flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-1">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            value={analyticsSearchQuery}
+            onChange={(e) => setAnalyticsSearchQuery(e.target.value)}
+            placeholder="Filter data analisis (ID Proyek, Deskripsi, Lokasi, ISP...)"
+            className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white font-mono placeholder:text-slate-500 focus:outline-none focus:border-red-500"
+          />
+          {analyticsSearchQuery && (
+            <button
+              onClick={() => setAnalyticsSearchQuery('')}
+              className="text-slate-400 hover:text-white p-1"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center gap-1.5">
+            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+            <select
+              value={analyticsCategoryFilter}
+              onChange={(e) => setAnalyticsCategoryFilter(e.target.value)}
+              className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-red-300 focus:outline-none focus:border-red-500"
+            >
+              <option value="ALL">Semua Kategori Proyek</option>
+              <option value="GOV APJATEL">GOV APJATEL</option>
+              <option value="GOV IPPJU">GOV IPPJU</option>
+              <option value="GOV SJUT">GOV SJUT</option>
+              <option value="Project Internal">Project Internal</option>
+            </select>
+          </div>
+
+          <select
+            value={analyticsStatusFilter}
+            onChange={(e) => setAnalyticsStatusFilter(e.target.value)}
+            className="bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-500"
+          >
+            <option value="ALL">Semua Status Proyek</option>
+            <option value="in progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="review dinas">Review Dinas</option>
+            <option value="not started">Not Started</option>
+            <option value="cancel">Cancel</option>
+          </select>
+        </div>
       </div>
 
       {/* Interactive Bar Chart & Pie Chart Section */}

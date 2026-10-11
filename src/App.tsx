@@ -19,8 +19,10 @@ import {
   getStoredConstructionPlans,
   saveConstructionPlans,
   getLastSyncTime,
-  exportDataAsJson
+  exportDataAsJson,
+  clearAllApplicationData
 } from './services/storage';
+import { deleteDocumentFromIDB } from './utils/indexedDB';
 
 import { LoginPage } from './components/LoginPage';
 import { Navbar } from './components/Navbar';
@@ -192,13 +194,81 @@ export default function App() {
     setLastSyncTime(new Date().toISOString());
   };
 
-  const handleDeletePlan = (id: string) => {
-    const target = plans.find((pl) => pl.id === id);
-    const updated = plans.filter((pl) => pl.id !== id);
-    setPlans(updated);
-    saveConstructionPlans(updated);
-    setLastSyncTime(new Date().toISOString());
-    showToast('error', 'Rencana Dihapus', `Rencana konstruksi ${target?.namaIsp || ''} telah dihapus.`);
+  const handleDeletePlan = (targetId: string) => {
+    try {
+      if (!targetId) {
+        showToast('error', 'Gagal Hapus', 'Target ID entri tidak valid.');
+        return;
+      }
+
+      const isMatch = (item: any) =>
+        Boolean(
+          (targetId && item.id === targetId) ||
+          (item.projectId && item.projectId === targetId) ||
+          (item.namaIsp && item.namaIsp.toLowerCase() === targetId.toLowerCase()) ||
+          (item.isp && item.isp.toLowerCase() === targetId.toLowerCase())
+        );
+
+      const matchedPlans = plans.filter(isMatch);
+      const matchedProjects = projects.filter(isMatch);
+
+      // Cleanup documents from IndexedDB
+      matchedPlans.forEach((target) => {
+        const attachedDocs = [
+          target.apdIsp,
+          target.baSurvey,
+          target.docKmz,
+          target.docApdRelokasi,
+          target.docApdIsp,
+          target.docTimeline,
+          target.docSuratPerintahRelokasi,
+          target.docBaSurveyInternal,
+          target.docBaSurveyBersama,
+          target.docSuratPenunjukanVendor,
+          target.docSuratRekomtek
+        ].filter(Boolean);
+
+        attachedDocs.forEach((doc) => {
+          if (doc?.id) {
+            deleteDocumentFromIDB(doc.id);
+          }
+        });
+      });
+
+      const updatedPlans = plans.filter((p) => !isMatch(p));
+      const updatedProjects = projects.filter((p) => !isMatch(p));
+
+      // Immediate state re-render
+      setPlans(updatedPlans);
+      setProjects(updatedProjects);
+
+      // Save to localStorage
+      saveConstructionPlans(updatedPlans);
+      saveProjects(updatedProjects);
+      try {
+        localStorage.removeItem('jws_plans');
+        localStorage.removeItem('jws_projects');
+      } catch (e) {
+        // ignore fallback
+      }
+
+      setLastSyncTime(new Date().toISOString());
+
+      const targetName =
+        matchedPlans[0]?.namaIsp ||
+        matchedPlans[0]?.projectId ||
+        matchedProjects[0]?.projectId ||
+        targetId;
+
+      showToast(
+        'error',
+        'Proyek Dihapus',
+        `Proyek ${targetName} berhasil dihapus secara bersih dari sistem.`
+      );
+    } catch (err) {
+      console.error('Error in handleDeletePlan:', err);
+      showToast('error', 'Gagal Hapus', 'Terjadi kesalahan sistem saat menghapus data.');
+    }
   };
 
   const handleRefreshData = () => {
@@ -211,6 +281,25 @@ export default function App() {
   const handleExportData = () => {
     exportDataAsJson();
     showToast('success', 'Database Dicadangkan', 'Berkas JSON ekspor cadangan berhasil diunduh.');
+  };
+
+  const handleClearAllData = async () => {
+    try {
+      await clearAllApplicationData();
+      setProjects([]);
+      setPlans([]);
+      try {
+        localStorage.removeItem('jws_plans');
+        localStorage.removeItem('jws_projects');
+      } catch (e) {
+        // ignore fallback
+      }
+      setLastSyncTime(new Date().toISOString());
+      showToast('error', 'Semua Data Dibersihkan', 'Seluruh data proyek, survey, dan dokumen telah dihapus bersih dari sistem.');
+    } catch (err) {
+      console.error('Failed to clear application data:', err);
+      showToast('error', 'Gagal Membersihkan Data', 'Terjadi kesalahan sistem saat mengosongkan data.');
+    }
   };
 
   const handleDataReset = () => {
@@ -233,6 +322,7 @@ export default function App() {
         onLogout={handleLogout}
         onRefreshData={handleRefreshData}
         onExportData={handleExportData}
+        onClearData={handleClearAllData}
         lastSyncTime={lastSyncTime}
         isRealtimeActive={isRealtimeActive}
         onToggleRealtime={() => {
@@ -327,6 +417,8 @@ export default function App() {
                 plans={plans}
                 groupFilter={surveyGroupFilter}
                 onSavePlan={handleSavePlan}
+                onSaveProject={handleSaveProject}
+                onDeletePlan={handleDeletePlan}
                 onViewPdf={(doc) => setActivePdfDocument(doc)}
                 showToast={showToast}
                 onGroupFilterChange={setSurveyGroupFilter}
