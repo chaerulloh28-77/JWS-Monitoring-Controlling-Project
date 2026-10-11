@@ -1,0 +1,6 @@
+{
+  "name": "JWS Gov Monitoring & Controlling Project",
+  "description": "Futuristic neon monitoring & controlling dashboard for JWS Government telecommunication, SJUT, IPPJU, and APJATEL utility relocation projects.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
