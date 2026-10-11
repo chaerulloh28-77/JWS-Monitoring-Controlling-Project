@@ -217,7 +217,16 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
         })
       });
 
-      const result = await response.json();
+      const responseText = await response.text();
+      let result: any;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error('Non-JSON response from /api/send-email:', responseText);
+        throw new Error(
+          `Server Vercel/Backend mengembalikan respon non-JSON (${response.status}). Pastikan Vercel Serverless Function /api/send-email.ts aktif.`
+        );
+      }
 
       if (response.ok && result.success) {
         if (result.isMockMode) {
