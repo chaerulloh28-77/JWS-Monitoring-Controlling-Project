@@ -54,10 +54,54 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
   const [groupFilter, setGroupFilter] = useState<'GOV' | 'INTERNAL' | 'ALL'>(defaultGroupFilter);
   const [selectedIspFilter, setSelectedIspFilter] = useState<string>(initialIsp);
   const [recipientEmail, setRecipientEmail] = useState('');
+  const [ccEmail, setCcEmail] = useState('');
   const [subject, setSubject] = useState('');
   const [customMessage, setCustomMessage] = useState('');
   const [includeCsv, setIncludeCsv] = useState(true);
   const [isSending, setIsSending] = useState(false);
+
+  // Email parser function (splits by comma, semicolon, or space and filters valid emails)
+  const parseEmails = (val: string) =>
+    val
+      ? val
+          .split(/[,;\s]+/)
+          .map((e) => e.trim())
+          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+      : [];
+
+  const parsedToEmails = useMemo(() => parseEmails(recipientEmail), [recipientEmail]);
+  const parsedCcEmails = useMemo(() => parseEmails(ccEmail), [ccEmail]);
+
+  // Helper to generate domain breakdown counter badge
+  const getDomainStats = (emails: string[]) => {
+    if (emails.length === 0) return '0 Email Valid';
+    let gmail = 0;
+    let yahoo = 0;
+    let outlook = 0;
+    let corporate = 0;
+
+    emails.forEach((email) => {
+      const domain = email.split('@')[1]?.toLowerCase() || '';
+      if (domain.includes('gmail')) gmail++;
+      else if (domain.includes('yahoo') || domain.includes('ymail')) yahoo++;
+      else if (
+        domain.includes('outlook') ||
+        domain.includes('hotmail') ||
+        domain.includes('live') ||
+        domain.includes('msn')
+      )
+        outlook++;
+      else corporate++;
+    });
+
+    const parts: string[] = [];
+    if (gmail) parts.push(`${gmail} Gmail`);
+    if (yahoo) parts.push(`${yahoo} Yahoo`);
+    if (outlook) parts.push(`${outlook} Outlook`);
+    if (corporate) parts.push(`${corporate} Korporat`);
+
+    return `${emails.length} Penerima Terdeteksi: ${parts.join(', ')}`;
+  };
 
   // Extract unique ISP list from plans
   const uniqueIspList = useMemo(() => {
@@ -222,11 +266,20 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
   if (!isOpen) return null;
 
   const handleSendEmail = async () => {
-    if (!recipientEmail.trim()) {
-      showToast('error', 'Email Tujuan Kosong', 'Harap masukkan setidaknya satu alamat email penerima.');
+    if (parsedToEmails.length === 0) {
+      showToast(
+        'error',
+        'Email Tujuan Kosong',
+        'Harap masukkan setidaknya satu alamat email penerima yang valid pada kolom To.'
+      );
       return;
     }
 
+    showToast(
+      'info',
+      'Mengirim Email',
+      `Sedang memproses pengiriman email ke ${parsedToEmails.length} penerima...`
+    );
     setIsSending(true);
 
     const selectedDocsList = availableDocs.filter((d) => selectedDocIds.has(d.id));
@@ -254,7 +307,8 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: recipientEmail,
+          to: parsedToEmails,
+          cc: parsedCcEmails,
           subject: subject || `Dokumen & Catatan Survey (${groupFilter})`,
           message: customMessage,
           groupFilter: groupFilter === 'GOV' ? 'GOV' : groupFilter === 'INTERNAL' ? 'INTERNAL' : 'Semua',
@@ -272,7 +326,7 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
       } catch (parseErr) {
         console.error('Non-JSON response from /api/send-email:', responseText);
         throw new Error(
-          `Server Vercel/Backend mengembalikan respon non-JSON (${response.status}). Pastikan Vercel Serverless Function /api/send-email.ts aktif.`
+          `Server mengembalikan respon non-JSON (${response.status}). Pastikan /api/send-email aktif.`
         );
       }
 
@@ -287,7 +341,9 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
           showToast(
             'success',
             'Email Berhasil Dikirim',
-            `Dokumen & file CSV telah dikirim ke ${recipientEmail}. Penerima dapat langsung mengunduh berkas!`
+            `Dokumen & file CSV telah terkirim ke ${parsedToEmails.join(', ')}${
+              parsedCcEmails.length > 0 ? ` (CC: ${parsedCcEmails.join(', ')})` : ''
+            }.`
           );
         }
         onClose();
@@ -441,15 +497,54 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1">
-                  Alamat Email Penerima <span className="text-rose-400">*</span>
+                  Penerima (To) <span className="text-rose-400">*</span>
                 </label>
                 <input
-                  type="email"
-                  placeholder="contoh: penerima@instansi.com, tim@jws.co.id"
+                  type="text"
+                  placeholder="pic1@gmail.com, pic2@yahoo.com, tim@dinas.go.id"
                   value={recipientEmail}
                   onChange={(e) => setRecipientEmail(e.target.value)}
-                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
                 />
+                <div className="mt-1 flex flex-col gap-1">
+                  <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                    <span>Mendukung: Gmail, Yahoo, Outlook, & email kantor (pemisah: , ; spasi)</span>
+                  </div>
+                  {parsedToEmails.length > 0 ? (
+                    <div className="text-[10px] font-mono px-2 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-bold flex items-center gap-1.5 w-fit">
+                      <Sparkles className="size-3 text-emerald-400 animate-pulse" />
+                      <span>{getDomainStats(parsedToEmails)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] font-mono text-amber-400">
+                      * Masukkan minimal 1 alamat email valid
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1">
+                  Tembusan (CC) <span className="text-slate-500">(Opsional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="supervisi@isp.com, admin@linknet.com"
+                  value={ccEmail}
+                  onChange={(e) => setCcEmail(e.target.value)}
+                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
+                />
+                <div className="mt-1 flex flex-col gap-1">
+                  <div className="text-[10px] font-mono text-slate-400 flex items-center justify-between">
+                    <span>Mendukung: Gmail, Yahoo, Outlook, & email kantor (pemisah: , ; spasi)</span>
+                  </div>
+                  {parsedCcEmails.length > 0 && (
+                    <div className="text-[10px] font-mono px-2 py-1 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-bold flex items-center gap-1.5 w-fit">
+                      <Sparkles className="size-3 text-cyan-400 animate-pulse" />
+                      <span>{getDomainStats(parsedCcEmails)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -459,18 +554,18 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
                   placeholder="Judul email..."
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors font-mono"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1">Pesan / Catatan Tambahan</label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   placeholder="Tuliskan catatan khusus untuk penerima email..."
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+                  className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors resize-none font-mono"
                 />
               </div>
             </div>
@@ -578,9 +673,23 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
             </div>
 
             <div className="p-4 rounded-xl bg-slate-900 border border-white/10 space-y-3 font-sans text-xs text-slate-300">
-              <div className="border-b border-white/10 pb-2 flex justify-between text-slate-400 font-mono text-[11px]">
-                <span>Kepada: {recipientEmail || 'penerima@example.com'}</span>
-                <span>Subjek: {subject}</span>
+              <div className="border-b border-white/10 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-slate-400 font-mono text-[11px]">
+                <div className="truncate">
+                  <span className="text-slate-500 font-bold">To: </span>
+                  <span className="text-emerald-300 font-semibold">
+                    {parsedToEmails.length > 0 ? parsedToEmails.join(', ') : 'pic1@isp.com, pic2@dinas.go.id'}
+                  </span>
+                  {parsedCcEmails.length > 0 && (
+                    <span className="ml-3">
+                      <span className="text-slate-500 font-bold">CC: </span>
+                      <span className="text-cyan-300 font-semibold">{parsedCcEmails.join(', ')}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="shrink-0">
+                  <span className="text-slate-500 font-bold">Subjek: </span>
+                  <span className="text-white font-semibold">{subject}</span>
+                </div>
               </div>
               <p className="whitespace-pre-line text-slate-200">{customMessage}</p>
 
@@ -661,9 +770,9 @@ export const ShareEmailModal: React.FC<ShareEmailModalProps> = ({
 
             <button
               type="button"
-              disabled={isSending}
+              disabled={parsedToEmails.length === 0 || isSending}
               onClick={handleSendEmail}
-              className="btn-cyan flex items-center gap-2 px-5 py-2.5 text-xs font-mono font-bold shadow-lg shadow-cyan-500/20 disabled:opacity-50"
+              className="btn-cyan flex items-center gap-2 px-5 py-2.5 text-xs font-mono font-bold shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isSending ? (
                 <>

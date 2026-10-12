@@ -28,10 +28,33 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const { to, subject, message, groupFilter, csvFilename, csvContent, attachments, documentLinks } = body || {};
+    const { to, cc, subject, message, groupFilter, csvFilename, csvContent, attachments, documentLinks } = body || {};
 
-    if (!to || typeof to !== 'string' || !to.trim()) {
-      return res.status(400).json({ success: false, error: 'Alamat email tujuan wajib diisi' });
+    const sanitizeEmailList = (data: any): string => {
+      if (Array.isArray(data)) {
+        return data
+          .map((e) => (typeof e === 'string' ? e.trim() : ''))
+          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+          .join(', ');
+      }
+      if (typeof data === 'string') {
+        return data
+          .split(/[,;\s]+/)
+          .map((e) => e.trim())
+          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))
+          .join(', ');
+      }
+      return '';
+    };
+
+    const toList = sanitizeEmailList(to);
+    const ccList = sanitizeEmailList(cc);
+
+    if (!toList) {
+      return res.status(400).json({
+        success: false,
+        error: 'Alamat email penerima (To) wajib diisi dan harus berkombinasi format email valid.'
+      });
     }
 
     // Prepare attachments array for nodemailer
@@ -176,10 +199,13 @@ export default async function handler(req: any, res: any) {
     }
 
     const senderFrom = process.env.SMTP_FROM || (smtpUser ? `"JWS Project System" <${smtpUser}>` : '"JWS Project System" <no-reply@jws-project.com>');
+    const senderReplyTo = process.env.SMTP_REPLY_TO || process.env.SMTP_USER || undefined;
 
-    const mailOptions = {
+    const mailOptions: any = {
       from: senderFrom,
-      to,
+      ...(senderReplyTo ? { replyTo: senderReplyTo } : {}),
+      to: toList,
+      ...(ccList ? { cc: ccList } : {}),
       subject: subject || `Dokumen & Catatan Survey (${groupFilter || 'GOV/INTERNAL'})`,
       text: `${message || 'Berikut terlampir dokumen & catatan survey.'}\n\nLampiran CSV: ${csvFilename || 'JWS_Survey_Dokumen.csv'}`,
       html: htmlBody,
@@ -187,24 +213,25 @@ export default async function handler(req: any, res: any) {
     };
 
     const info = await transporter.sendMail(mailOptions);
-    console.log('Vercel Function Email dispatch result:', info);
+    console.log('Email dispatch result:', info);
 
     return res.status(200).json({
       success: true,
       message: isMockMode
         ? `Format email disiapkan. SMTP belum diatur di Environment Variables (SMTP_HOST / SMTP_USER).`
-        : `Email berhasil dikirim ke ${to}`,
+        : `Email berhasil dikirim ke ${toList}${ccList ? ` (CC: ${ccList})` : ''}`,
       isMockMode,
       details: {
-        recipients: to,
+        recipients: toList,
+        ccRecipients: ccList || null,
         csvAttached: !!csvFilename,
         docsAttached: emailAttachments.length - (csvFilename ? 1 : 0),
         messageId: info.messageId || 'sent-ok'
       }
     });
   } catch (error: any) {
-    console.error('Vercel API send-email error:', error);
-    return res.status(500).json({
+    console.error('API send-email error:', error);
+    return res.status(400).json({
       success: false,
       error: error.message || 'Terjadi kesalahan sistem saat mengirim email',
       details: {

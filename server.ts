@@ -9,7 +9,16 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '50mb' }));
 
 // API Endpoints
-app.post('/api/send-email', (req, res) => sendEmailHandler(req, res));
+app.post('/api/send-email', async (req, res) => {
+  try {
+    await sendEmailHandler(req, res);
+  } catch (err: any) {
+    console.error('Unhandled error in /api/send-email route:', err);
+    if (!res.headersSent) {
+      res.status(400).json({ success: false, error: err?.message || 'Gagal memproses pengiriman email.' });
+    }
+  }
+});
 app.post('/api/extract-ba-survey', (req, res) => extractBaSurveyHandler(req, res));
 
 async function startServer() {
